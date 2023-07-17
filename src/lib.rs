@@ -11,6 +11,7 @@ pub struct ShredOptions {
 #[derive(Debug)]
 pub enum ShredError {
     DirectoryWithoutRecursive,
+    PathDoesntExist,
 }
 
 pub struct Shredder {
@@ -26,6 +27,9 @@ impl Shredder {
         if path.is_dir() && !self.options.recursive {
             return Err(ShredError::DirectoryWithoutRecursive);
         }
+        if !path.exists() {
+            return Err(ShredError::PathDoesntExist);
+        }
 
         Ok(())
     }
@@ -36,9 +40,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn hello_txt() {
+    fn directory_without_recursive() {
         let s = Shredder::new(ShredOptions::default());
-        s.shred(Path::new("test.txt"));
-        assert!(true); // FIXME: Actually test logic
+        assert!(s.shred(Path::new("./test/")).is_err());
+    }
+    #[test]
+    fn path_doesnt_exist() {
+        let s = Shredder::new(ShredOptions::default());
+        assert!(s.shred(Path::new("./fake_path/")).is_err());
     }
 }
