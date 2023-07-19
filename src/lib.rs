@@ -155,4 +155,17 @@ mod tests {
         s.shred(path).unwrap();
         assert!(is_zeroed(path));
     }
+    #[test]
+    #[serial]
+    fn deallocate_after_shred() {
+        let s = Shredder::new(ShredOptions {
+            verbose: true,
+            deallocate: true,
+            ..Default::default()
+        });
+        let path = make_random_data_file(32768).unwrap();
+        let path = Path::new(&path);
+        s.shred(path).unwrap();
+        assert!(!path.exists());
+    }
 }
