@@ -1,7 +1,6 @@
-use std::fs::{File, OpenOptions};
+use std::fs::{OpenOptions, self};
 use std::io::Write;
 use std::path::Path;
-use std::{process, io}; 
 
 const BLOCK_SIZE: usize = 16384;
 
@@ -38,17 +37,28 @@ impl Shredder {
     }
 
     fn shred_file(&self, path: &Path) {
-        self.log(&format!("Starting shred of file: {}", path.to_str().unwrap()));
+        let filename = path.to_str().unwrap();
+        self.log(&format!("Starting shred of file: {}", filename));
         let mut buffer = OpenOptions::new().write(true).open(path).unwrap();
         let mut pos: usize = 0;
         let zeros: [u8;BLOCK_SIZE] = [0;BLOCK_SIZE];
         let original_len: usize = buffer.metadata().unwrap().len() as usize;
+
+        // Overwrite file data
         while pos < original_len {
             self.log(&format!("pos: {}", pos));
             let bytes_written = buffer.write(&zeros[0..(original_len - pos).min(BLOCK_SIZE)]).unwrap();
             pos += bytes_written;
         }
         buffer.flush().unwrap();
+
+        // Deallocate
+        if self.options.deallocate {
+            match fs::remove_file(path) {
+                Ok(_) => self.log(&format!("Removed {}", filename)),
+                Err(e) => self.write(&format!("Failed to remove {}: {}", filename, e.kind())) // TOOD: stderr
+            }
+        }
     }
 
     pub fn shred(&self, path: &Path) -> Result<(), ShredError> {
@@ -60,6 +70,9 @@ impl Shredder {
         }
         if path.is_file() {
             self.shred_file(path);
+        }
+        if path.is_dir() {
+            // Traverse directory structure and shred_file all
         }
 
         Ok(())
@@ -73,6 +86,8 @@ mod tests {
     use std::io::{BufWriter, Read};
     use rand::Rng;
     use std::path::Path;
+    use std::fs::File;
+    use serial_test::serial;
 
     fn make_random_data_file(bytes: usize) -> Result<String, ()> {
         let start = SystemTime::now();
@@ -102,9 +117,8 @@ mod tests {
     fn is_zeroed(path: &Path) -> bool {
         let mut buffer = File::open(path).unwrap();
         let mut vec: Vec<u8> = Vec::new();
-        buffer.read_to_end(&mut vec);
-
-        return vec.iter().all(|&x| x == 0)
+        let _ = buffer.read_to_end(&mut vec);
+        return vec.iter().all(|&x| x == 0);
     }
 
     #[test]
@@ -118,6 +132,7 @@ mod tests {
         assert!(s.shred(Path::new("./fake_path/")).is_err());
     }
     #[test]
+    #[serial]
     fn shred_32kib_file() {
         let s = Shredder::new(ShredOptions {
             verbose: true,
@@ -129,6 +144,7 @@ mod tests {
         assert!(is_zeroed(path));
     }
     #[test]
+    #[serial]
     fn shred_43001_byte_file() {
         let s = Shredder::new(ShredOptions {
             verbose: true,
