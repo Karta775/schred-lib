@@ -69,6 +69,43 @@ impl Shredder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::io::{BufWriter, Read};
+    use rand::Rng;
+    use std::path::Path;
+
+    fn make_random_data_file(bytes: usize) -> Result<String, ()> {
+        let start = SystemTime::now();
+        let since_the_epoch = start
+            .duration_since(UNIX_EPOCH)
+            .expect("Error occurred")
+            .as_secs();
+        let path = &format!("/tmp/schred-{}", since_the_epoch);
+        let file = File::create(path).unwrap();
+        let mut writer = BufWriter::new(file);
+        
+        let mut rng = rand::thread_rng();
+        let mut buffer = [0; 1024];
+        let mut remaining_size = bytes;
+        
+        while remaining_size > 0 {
+            let to_write = std::cmp::min(remaining_size, buffer.len());
+            let buffer=  &mut buffer[..to_write];
+            rng.fill(buffer);
+            writer.write(buffer).unwrap();
+            
+            remaining_size -= to_write;
+        }
+        Ok(path.to_owned())
+    }
+
+    fn is_zeroed(path: &Path) -> bool {
+        let mut buffer = File::open(path).unwrap();
+        let mut vec: Vec<u8> = Vec::new();
+        buffer.read_to_end(&mut vec);
+
+        return vec.iter().all(|&x| x == 0)
+    }
 
     #[test]
     fn directory_without_recursive() {
@@ -79,5 +116,27 @@ mod tests {
     fn path_doesnt_exist() {
         let s = Shredder::new(ShredOptions::default());
         assert!(s.shred(Path::new("./fake_path/")).is_err());
+    }
+    #[test]
+    fn shred_32kib_file() {
+        let s = Shredder::new(ShredOptions {
+            verbose: true,
+            ..Default::default()
+        });
+        let path = make_random_data_file(32768).unwrap();
+        let path = Path::new(&path);
+        s.shred(path).unwrap();
+        assert!(is_zeroed(path));
+    }
+    #[test]
+    fn shred_43001_byte_file() {
+        let s = Shredder::new(ShredOptions {
+            verbose: true,
+            ..Default::default()
+        });
+        let path = make_random_data_file(43001).unwrap();
+        let path = Path::new(&path);
+        s.shred(path).unwrap();
+        assert!(is_zeroed(path));
     }
 }

@@ -12,3 +12,6 @@ name = "schred"
 path = "src/bin.rs"
 
 [dependencies]
+
+[dev-dependencies]
+rand = "0.8.5"
