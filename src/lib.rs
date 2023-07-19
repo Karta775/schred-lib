@@ -1,8 +1,9 @@
-use std::fs::{OpenOptions, self};
+use std::fs::{OpenOptions, self, File};
 use std::io::Write;
 use std::path::Path;
 
 const BLOCK_SIZE: usize = 16384;
+const ZERO_DATA: [u8;BLOCK_SIZE] = [0;BLOCK_SIZE];
 
 #[derive(Default)]
 pub struct ShredOptions {
@@ -30,33 +31,45 @@ impl Shredder {
         println!("schred: {}", message);
     }
 
+    fn error(&self, message: &str) {
+        eprintln!("schred: ERROR: {}", message);
+    }
+
     fn log(&self, message: &str) {
         if self.options.verbose {
             self.write(message);
         }
     }
 
+    /// Perform n passes overwriting with zeros.
+    fn overwrite_with_zeros(&self, file: &mut File, passes: u8) {
+        let original_len: usize = file.metadata().unwrap().len() as usize;
+
+        for i in 0..passes {
+            self.log(&format!("Pass {}: wiping with zeros", i + 1));
+            let mut pos: usize = 0;
+            while pos < original_len {
+                let end = (original_len - pos).min(BLOCK_SIZE);
+                let bytes_written = file.write(&ZERO_DATA[0..end]).unwrap();
+                pos += bytes_written;
+            }
+            file.flush().unwrap();
+        }
+    }
+
     fn shred_file(&self, path: &Path) {
         let filename = path.to_str().unwrap();
         self.log(&format!("Starting shred of file: {}", filename));
-        let mut buffer = OpenOptions::new().write(true).open(path).unwrap();
-        let mut pos: usize = 0;
-        let zeros: [u8;BLOCK_SIZE] = [0;BLOCK_SIZE];
-        let original_len: usize = buffer.metadata().unwrap().len() as usize;
 
         // Overwrite file data
-        while pos < original_len {
-            self.log(&format!("pos: {}", pos));
-            let bytes_written = buffer.write(&zeros[0..(original_len - pos).min(BLOCK_SIZE)]).unwrap();
-            pos += bytes_written;
-        }
-        buffer.flush().unwrap();
+        let mut file = OpenOptions::new().write(true).open(path).unwrap();
+        self.overwrite_with_zeros(&mut file, 6);
 
         // Deallocate
         if self.options.deallocate {
             match fs::remove_file(path) {
                 Ok(_) => self.log(&format!("Removed {}", filename)),
-                Err(e) => self.write(&format!("Failed to remove {}: {}", filename, e.kind())) // TOOD: stderr
+                Err(e) => self.error(&format!("Failed to remove {}: {}", filename, e.kind()))
             }
         }
     }
