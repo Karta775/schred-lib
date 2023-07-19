@@ -63,7 +63,7 @@ impl Shredder {
 
         // Overwrite file data
         let mut file = OpenOptions::new().write(true).open(path).unwrap();
-        self.overwrite_with_zeros(&mut file, 6);
+        self.overwrite_with_zeros(&mut file, 6); // TODO: Remove hard-coded number
 
         // Deallocate
         if self.options.deallocate {
