@@ -5,11 +5,24 @@ use std::path::Path;
 const BLOCK_SIZE: usize = 16384;
 const ZERO_DATA: [u8;BLOCK_SIZE] = [0;BLOCK_SIZE];
 
-#[derive(Default)]
 pub struct ShredOptions {
     pub verbose: bool,
     pub deallocate: bool,
     pub recursive: bool,
+    pub zero_passes: u8,
+    pub rand_passes: u8,
+}
+
+impl Default for ShredOptions {
+    fn default() -> Self {
+        ShredOptions { 
+            verbose: false,
+            deallocate: false,
+            recursive: false,
+            zero_passes: 1,
+            rand_passes: 2,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -63,7 +76,7 @@ impl Shredder {
 
         // Overwrite file data
         let mut file = OpenOptions::new().write(true).open(path).unwrap();
-        self.overwrite_with_zeros(&mut file, 6); // TODO: Remove hard-coded number
+        self.overwrite_with_zeros(&mut file, self.options.zero_passes);
 
         // Deallocate
         if self.options.deallocate {
