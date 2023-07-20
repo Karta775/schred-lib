@@ -16,7 +16,7 @@ pub struct ShredOptions {
 impl Default for ShredOptions {
     fn default() -> Self {
         ShredOptions { 
-            verbose: false,
+            verbose: cfg!(debug_assertions), // Enable verbose for debug builds
             deallocate: false,
             recursive: false,
             zero_passes: 1,
