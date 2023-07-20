@@ -1,6 +1,7 @@
 use std::fs::{OpenOptions, self, File};
-use std::io::Write;
+use std::io::{Write, Seek, SeekFrom};
 use std::path::Path;
+use rand_core::{RngCore, OsRng};
 
 const BLOCK_SIZE: usize = 16384;
 const ZERO_DATA: [u8;BLOCK_SIZE] = [0;BLOCK_SIZE];
@@ -60,13 +61,33 @@ impl Shredder {
 
         for i in 0..passes {
             self.log(&format!("Pass {}: wiping with zeros", i + 1));
+            file.seek(SeekFrom::Start(0)).expect("Failed to seek to start of file");
             let mut pos: usize = 0;
             while pos < original_len {
                 let end = (original_len - pos).min(BLOCK_SIZE);
                 let bytes_written = file.write(&ZERO_DATA[0..end]).unwrap();
                 pos += bytes_written;
             }
-            file.flush().unwrap();
+            file.sync_all().unwrap();
+        }
+    }
+
+    /// Perform n passes overwriting with random data.
+    fn overwrite_with_rand(&self, file: &mut File, passes: u8) {
+        let original_len: usize = file.metadata().unwrap().len() as usize;
+
+        for i in 0..passes {
+            self.log(&format!("Pass {}: wiping with random data", i + 1));
+            file.seek(SeekFrom::Start(0)).expect("Failed to seek to start of file");
+            let mut pos: usize = 0;
+            while pos < original_len {
+                let mut rand_data = [0u8; BLOCK_SIZE];
+                OsRng.fill_bytes(&mut rand_data);
+                let end = (original_len - pos).min(BLOCK_SIZE);
+                let bytes_written = file.write(&rand_data[0..end]).unwrap();
+                pos += bytes_written;
+            }
+            file.sync_all().unwrap();
         }
     }
 
@@ -75,7 +96,11 @@ impl Shredder {
         self.log(&format!("Starting shred of file: {}", filename));
 
         // Overwrite file data
-        let mut file = OpenOptions::new().write(true).open(path).unwrap();
+        let mut file = OpenOptions::new()
+                                .write(true)
+                                .open(path)
+                                .unwrap();
+        self.overwrite_with_rand(&mut file, self.options.rand_passes);
         self.overwrite_with_zeros(&mut file, self.options.zero_passes);
 
         // Deallocate

@@ -12,6 +12,7 @@ name = "schred"
 path = "src/bin.rs"
 
 [dependencies]
+rand_core = { version = "0.6.4",  features = ["getrandom"] }
 
 [dev-dependencies]
 rand = "0.8.5"
