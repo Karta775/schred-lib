@@ -55,40 +55,35 @@ impl Shredder {
         }
     }
 
+    // TODO: Make a higher order function to generate BLOCK_SIZE data
     /// Perform n passes overwriting with zeros.
-    fn overwrite_with_zeros(&self, file: &mut File, passes: u8) {
+    fn overwrite_with_zeros(&self, file: &mut File) {
         let original_len: usize = file.metadata().unwrap().len() as usize;
 
-        for i in 0..passes {
-            self.log(&format!("Pass {}: wiping with zeros", i + 1));
-            file.seek(SeekFrom::Start(0)).expect("Failed to seek to start of file");
-            let mut pos: usize = 0;
-            while pos < original_len {
-                let end = (original_len - pos).min(BLOCK_SIZE);
-                let bytes_written = file.write(&ZERO_DATA[0..end]).unwrap();
-                pos += bytes_written;
-            }
-            file.sync_all().unwrap();
+        file.seek(SeekFrom::Start(0)).expect("Failed to seek to start of file");
+        let mut pos: usize = 0;
+        while pos < original_len {
+            let end = (original_len - pos).min(BLOCK_SIZE);
+            let bytes_written = file.write(&ZERO_DATA[0..end]).unwrap();
+            pos += bytes_written;
         }
+        file.sync_all().unwrap();
     }
 
     /// Perform n passes overwriting with random data.
-    fn overwrite_with_rand(&self, file: &mut File, passes: u8) {
+    fn overwrite_with_rand(&self, file: &mut File) {
         let original_len: usize = file.metadata().unwrap().len() as usize;
 
-        for i in 0..passes {
-            self.log(&format!("Pass {}: wiping with random data", i + 1));
-            file.seek(SeekFrom::Start(0)).expect("Failed to seek to start of file");
-            let mut pos: usize = 0;
-            while pos < original_len {
-                let mut rand_data = [0u8; BLOCK_SIZE];
-                OsRng.fill_bytes(&mut rand_data);
-                let end = (original_len - pos).min(BLOCK_SIZE);
-                let bytes_written = file.write(&rand_data[0..end]).unwrap();
-                pos += bytes_written;
-            }
-            file.sync_all().unwrap();
+        file.seek(SeekFrom::Start(0)).expect("Failed to seek to start of file");
+        let mut pos: usize = 0;
+        while pos < original_len {
+            let mut rand_data = [0u8; BLOCK_SIZE];
+            OsRng.fill_bytes(&mut rand_data);
+            let end = (original_len - pos).min(BLOCK_SIZE);
+            let bytes_written = file.write(&rand_data[0..end]).unwrap();
+            pos += bytes_written;
         }
+        file.sync_all().unwrap();
     }
 
     fn shred_file(&self, path: &Path) {
@@ -100,8 +95,18 @@ impl Shredder {
                                 .write(true)
                                 .open(path)
                                 .unwrap();
-        self.overwrite_with_rand(&mut file, self.options.rand_passes);
-        self.overwrite_with_zeros(&mut file, self.options.zero_passes);
+        let mut passes = 0;
+        let total_passes = self.options.rand_passes + self.options.zero_passes;
+        for _ in 0..self.options.rand_passes {
+            passes += 1;
+            self.log(&format!("Pass {}/{}: wiping with random data", passes, total_passes));
+            self.overwrite_with_rand(&mut file);
+        }        
+        for _ in 0..self.options.zero_passes {
+            passes += 1;
+            self.log(&format!("Pass {}/{}: wiping with zeros", passes, total_passes));
+            self.overwrite_with_zeros(&mut file);
+        }
 
         // Deallocate
         if self.options.deallocate {
