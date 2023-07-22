@@ -4,7 +4,6 @@ use std::path::Path;
 use rand_core::{RngCore, OsRng};
 
 const BLOCK_SIZE: usize = 16384;
-const ZERO_DATA: [u8;BLOCK_SIZE] = [0;BLOCK_SIZE];
 
 pub struct ShredOptions {
     pub verbose: bool,
@@ -36,56 +35,57 @@ pub struct Shredder {
     options: ShredOptions,
 }
 
+pub struct DataGenerator;
+impl DataGenerator {
+    fn zero() -> [u8; BLOCK_SIZE] {
+        [0;BLOCK_SIZE]
+    }
+    
+    fn random() -> [u8; BLOCK_SIZE] {
+        let mut rand_data = [0u8; BLOCK_SIZE];
+        OsRng.fill_bytes(&mut rand_data);
+        rand_data
+    }
+}
+
 impl Shredder {
     pub fn new(options: ShredOptions) -> Self {
         return Shredder { options }
     }
 
+    /// Write to stdout.
     fn write(&self, message: &str) {
         println!("schred: {}", message);
     }
 
+    /// Write to stderr.
     fn error(&self, message: &str) {
         eprintln!("schred: ERROR: {}", message);
     }
 
+    /// Log some message to be shown in verbose mode.
     fn log(&self, message: &str) {
         if self.options.verbose {
             self.write(message);
         }
     }
 
-    // TODO: Make a higher order function to generate BLOCK_SIZE data
-    /// Perform n passes overwriting with zeros.
-    fn overwrite_with_zeros(&self, file: &mut File) {
+    /// Perform n passes overwriting with data specified by a generator function.
+    fn overwrite_file_with_data(&self, file: &mut File, data_fn: fn() -> [u8; BLOCK_SIZE]) {
         let original_len: usize = file.metadata().unwrap().len() as usize;
 
         file.seek(SeekFrom::Start(0)).expect("Failed to seek to start of file");
         let mut pos: usize = 0;
         while pos < original_len {
+            let data = data_fn();
             let end = (original_len - pos).min(BLOCK_SIZE);
-            let bytes_written = file.write(&ZERO_DATA[0..end]).unwrap();
+            let bytes_written = file.write(&data[0..end]).unwrap();
             pos += bytes_written;
         }
         file.sync_all().unwrap();
     }
 
-    /// Perform n passes overwriting with random data.
-    fn overwrite_with_rand(&self, file: &mut File) {
-        let original_len: usize = file.metadata().unwrap().len() as usize;
-
-        file.seek(SeekFrom::Start(0)).expect("Failed to seek to start of file");
-        let mut pos: usize = 0;
-        while pos < original_len {
-            let mut rand_data = [0u8; BLOCK_SIZE];
-            OsRng.fill_bytes(&mut rand_data);
-            let end = (original_len - pos).min(BLOCK_SIZE);
-            let bytes_written = file.write(&rand_data[0..end]).unwrap();
-            pos += bytes_written;
-        }
-        file.sync_all().unwrap();
-    }
-
+    /// Shred a single file.
     fn shred_file(&self, path: &Path) {
         let filename = path.to_str().unwrap();
         self.log(&format!("Starting shred of file: {}", filename));
@@ -97,15 +97,19 @@ impl Shredder {
                                 .unwrap();
         let mut passes = 0;
         let total_passes = self.options.rand_passes + self.options.zero_passes;
+
+        // Overwrite with random data
         for _ in 0..self.options.rand_passes {
             passes += 1;
             self.log(&format!("Pass {}/{}: wiping with random data", passes, total_passes));
-            self.overwrite_with_rand(&mut file);
-        }        
+            self.overwrite_file_with_data(&mut file, DataGenerator::random);
+        }
+
+        // Overwrite with zeros 
         for _ in 0..self.options.zero_passes {
             passes += 1;
             self.log(&format!("Pass {}/{}: wiping with zeros", passes, total_passes));
-            self.overwrite_with_zeros(&mut file);
+            self.overwrite_file_with_data(&mut file, DataGenerator::zero);
         }
 
         // Deallocate
@@ -117,6 +121,7 @@ impl Shredder {
         }
     }
 
+    /// Shred the resources at `path` based on ShredOptions.
     pub fn shred(&self, path: &Path) -> Result<(), ShredError> {
         if path.is_dir() && !self.options.recursive {
             return Err(ShredError::DirectoryWithoutRecursive);
@@ -145,6 +150,7 @@ mod tests {
     use std::fs::File;
     use serial_test::serial;
 
+    /// Make a tmpfile with random data of size `bytes`.
     fn make_random_data_file(bytes: usize) -> Result<String, ()> {
         let start = SystemTime::now();
         let since_the_epoch = start
@@ -170,6 +176,7 @@ mod tests {
         Ok(path.to_owned())
     }
 
+    /// Check if a file contains only zeros.
     fn is_zeroed(path: &Path) -> bool {
         let mut buffer = File::open(path).unwrap();
         let mut vec: Vec<u8> = Vec::new();
