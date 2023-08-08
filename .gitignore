@@ -2,3 +2,4 @@
 /Cargo.lock
 /test.txt
 /test.bin
+**/*.DS_Store
