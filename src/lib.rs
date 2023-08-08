@@ -3,7 +3,7 @@ use std::io::{Write, Seek, SeekFrom};
 use std::path::Path;
 use rand_core::{RngCore, OsRng};
 
-const BLOCK_SIZE: usize = 16384;
+const BLOCK_SIZE: usize = 16384; // 16KiB
 
 pub struct ShredOptions {
     pub verbose: bool,
@@ -133,7 +133,19 @@ impl Shredder {
             self.shred_file(path);
         }
         if path.is_dir() {
-            // Traverse directory structure and shred_file all
+            // Recursively shred sub directories
+            let sub_paths = fs::read_dir(path).expect("Error reading path");
+            for sub_path in sub_paths {
+                self.shred(&sub_path.expect("Error getting sub path").path()).unwrap();
+            }
+            // Deallocate(?) dir
+            if self.options.deallocate {
+                let filename = path.to_str().expect("Couldn't get filename");
+                match fs::remove_dir(path) {
+                    Ok(_) => self.log(&format!("Removed {}", filename)),
+                    Err(e) => self.error(&format!("Failed to remove {}: {}", filename, e.kind()))
+                }
+            }
         }
 
         Ok(())
