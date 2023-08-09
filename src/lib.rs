@@ -169,6 +169,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("Error occurred")
             .as_secs();
+        // TODO: Make this cross-platform
         let path = &format!("/tmp/schred-{}", since_the_epoch);
         let file = File::create(path).unwrap();
         let mut writer = BufWriter::new(file);

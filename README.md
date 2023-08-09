@@ -1,3 +1,11 @@
-# schred
+# schred-lib
 
-schred is a Rust library & binary implementation of the [GNU shred](https://www.gnu.org/software/coreutils/manual/html_node/shred-invocation.html) utility. For now the goal is to have a super-set of the GNU shred features, and the schred library crate will eventually be used to write a secure, extensible cache cleaner.
+schred-lib is a Rust crate for securely erasing files and directories, similarly to GNU shred.
+
+## Features
+
+The following features are available as options:
+
+* Customisable number of random/zero passes.
+* Recursively erase sub-directories & files.
+* Deallocation (rm) files once erase is complete.

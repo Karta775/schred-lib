@@ -1,15 +1,11 @@
 [package]
-name = "schred"
+name = "schred-lib"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "schred"
+name = "schred-lib"
 path = "src/lib.rs"
-
-[[bin]]
-name = "schred"
-path = "src/bin.rs"
 
 [dependencies]
 rand_core = { version = "0.6.4",  features = ["getrandom"] }
