@@ -1,6 +1,6 @@
 # schred_lib
 
-schred-lib is a Rust crate for securely erasing files and directories, similarly to GNU shred.
+schred_lib is a Rust crate for securely erasing files and directories, similarly to GNU shred.
 
 ## Features
 
